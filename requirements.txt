@@ -9,3 +9,4 @@ openai
 azure-cognitiveservices-speech
 elevenlabs
 rev-ai
+sarvamai

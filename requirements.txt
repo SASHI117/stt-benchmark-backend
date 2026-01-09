@@ -1,5 +1,9 @@
 fastapi
 uvicorn
+python-multipart
+requests
 python-dotenv
 sqlalchemy
-requests
+psycopg2-binary
+
+azure-cognitiveservices-speech

@@ -34,7 +34,7 @@ app = FastAPI(
 # ================= CORS =================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # frontend allowed
+    allow_origins=["*"],   # allow all frontends
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,6 +49,11 @@ PROVIDERS = [
     ("Sarvam", sarvam),
     ("Soniox", soniox),
 ]
+
+# ================= HEALTH CHECK =================
+@app.get("/")
+def health():
+    return {"status": "Backend running"}
 
 # ================= BENCHMARK ENDPOINT =================
 @app.post("/benchmark")
@@ -125,11 +130,10 @@ def benchmark(
         db.commit()
 
     finally:
-        os.remove(audio_path)
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
 
-    return results
-
-# ================= HEALTH CHECK =================
-@app.get("/")
-def health():
-    return {"status": "Backend running"}
+    return {
+        "run_id": run.id,
+        "results": results
+    }

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 load_dotenv()
 
 # ================= DATABASE =================
-from database import get_db
+from database import get_db, init_db
 from models import BenchmarkRun, BenchmarkResult
 
 # ================= METRICS =================
@@ -31,10 +31,15 @@ app = FastAPI(
     version="1.0"
 )
 
+# ================= STARTUP (CRITICAL FIX) =================
+@app.on_event("startup")
+def startup_event():
+    init_db()
+
 # ================= CORS =================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # allow all frontends
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

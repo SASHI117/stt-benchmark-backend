@@ -1,5 +1,6 @@
 import os
 import tempfile
+from typing import Optional
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
@@ -23,7 +24,7 @@ from openai_stt import transcribe as openai
 from revai_stt import transcribe as revai
 from sarvam_stt import transcribe as sarvam
 from soniox_stt import transcribe as soniox
-from google_stt import transcribe as google   # ✅ NEW
+from google_stt import transcribe as google  # ✅ Google
 
 # ================= FASTAPI APP =================
 app = FastAPI(
@@ -46,7 +47,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ================= PROVIDERS (AUTO-DETECT) =================
+# ================= AUTO-DETECT PROVIDERS =================
 AUTO_PROVIDERS = [
     ("Azure", azure),
     ("ElevenLabs", elevenlabs),
@@ -56,7 +57,7 @@ AUTO_PROVIDERS = [
     ("Soniox", soniox),
 ]
 
-# ================= HEALTH CHECK =================
+# ================= HEALTH =================
 @app.get("/")
 def health():
     return {"status": "Backend running"}
@@ -66,7 +67,7 @@ def health():
 def benchmark(
     audio: UploadFile = File(...),
     reference_text: str = Form(...),
-    language_code: str | None = Form(None),   # ✅ NEW (for Google)
+    language_code: Optional[str] = Form(None),  # ✅ Google only
     db: Session = Depends(get_db)
 ):
     if not reference_text.strip():
@@ -79,6 +80,10 @@ def benchmark(
     if not audio.filename.lower().endswith(allowed_extensions):
         raise HTTPException(status_code=400, detail="Unsupported audio format")
 
+    # Normalize empty string
+    if language_code is not None:
+        language_code = language_code.strip() or None
+
     # ---------- CREATE RUN ----------
     run = BenchmarkRun(
         audio_filename=audio.filename,
@@ -90,20 +95,19 @@ def benchmark(
 
     results = []
 
-    # ---------- SAVE AUDIO TEMP ----------
+    # ---------- SAVE AUDIO ----------
     with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
         tmp.write(audio.file.read())
         audio_path = tmp.name
 
     try:
-        # ===== AUTO-DETECT PROVIDERS =====
+        # ===== AUTO PROVIDERS =====
         for provider_name, provider_func in AUTO_PROVIDERS:
             try:
                 result = provider_func(audio_path)
 
                 wer_percent = round(
-                    word_error_rate(reference_text, result["text"]) * 100,
-                    2
+                    word_error_rate(reference_text, result["text"]) * 100, 2
                 )
 
                 results.append({
@@ -132,14 +136,22 @@ def benchmark(
                     "error": str(e)
                 })
 
-        # ===== GOOGLE STT (LANGUAGE REQUIRED) =====
-        if language_code:
+        # ===== GOOGLE STT (MANDATORY LANGUAGE) =====
+        if language_code is None:
+            results.append({
+                "provider": "Google",
+                "text": "",
+                "wer": None,
+                "latency_ms": None,
+                "status": "skipped",
+                "error": "language_code is required for Google STT"
+            })
+        else:
             try:
                 result = google(audio_path, language_code)
 
                 wer_percent = round(
-                    word_error_rate(reference_text, result["text"]) * 100,
-                    2
+                    word_error_rate(reference_text, result["text"]) * 100, 2
                 )
 
                 results.append({

@@ -23,6 +23,7 @@ from openai_stt import transcribe as openai
 from revai_stt import transcribe as revai
 from sarvam_stt import transcribe as sarvam
 from soniox_stt import transcribe as soniox
+from google_stt import transcribe as google   # ✅ NEW
 
 # ================= FASTAPI APP =================
 app = FastAPI(
@@ -31,7 +32,7 @@ app = FastAPI(
     version="1.0"
 )
 
-# ================= STARTUP (CRITICAL FIX) =================
+# ================= STARTUP =================
 @app.on_event("startup")
 def startup_event():
     init_db()
@@ -45,8 +46,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ================= PROVIDERS =================
-PROVIDERS = [
+# ================= PROVIDERS (AUTO-DETECT) =================
+AUTO_PROVIDERS = [
     ("Azure", azure),
     ("ElevenLabs", elevenlabs),
     ("OpenAI", openai),
@@ -60,11 +61,12 @@ PROVIDERS = [
 def health():
     return {"status": "Backend running"}
 
-# ================= BENCHMARK ENDPOINT =================
+# ================= BENCHMARK =================
 @app.post("/benchmark")
 def benchmark(
     audio: UploadFile = File(...),
     reference_text: str = Form(...),
+    language_code: str | None = Form(None),   # ✅ NEW (for Google)
     db: Session = Depends(get_db)
 ):
     if not reference_text.strip():
@@ -94,7 +96,8 @@ def benchmark(
         audio_path = tmp.name
 
     try:
-        for provider_name, provider_func in PROVIDERS:
+        # ===== AUTO-DETECT PROVIDERS =====
+        for provider_name, provider_func in AUTO_PROVIDERS:
             try:
                 result = provider_func(audio_path)
 
@@ -103,28 +106,61 @@ def benchmark(
                     2
                 )
 
-                response = {
+                results.append({
                     "provider": provider_name,
                     "text": result["text"],
                     "wer": wer_percent,
                     "latency_ms": result["latency_ms"],
                     "status": "success"
-                }
+                })
 
-                db_result = BenchmarkResult(
+                db.add(BenchmarkResult(
                     run_id=run.id,
                     provider=provider_name,
                     transcript=result["text"],
                     wer=wer_percent,
                     latency_ms=result["latency_ms"]
-                )
-
-                db.add(db_result)
-                results.append(response)
+                ))
 
             except Exception as e:
                 results.append({
                     "provider": provider_name,
+                    "text": "",
+                    "wer": None,
+                    "latency_ms": None,
+                    "status": "failed",
+                    "error": str(e)
+                })
+
+        # ===== GOOGLE STT (LANGUAGE REQUIRED) =====
+        if language_code:
+            try:
+                result = google(audio_path, language_code)
+
+                wer_percent = round(
+                    word_error_rate(reference_text, result["text"]) * 100,
+                    2
+                )
+
+                results.append({
+                    "provider": "Google",
+                    "text": result["text"],
+                    "wer": wer_percent,
+                    "latency_ms": result["latency_ms"],
+                    "status": "success"
+                })
+
+                db.add(BenchmarkResult(
+                    run_id=run.id,
+                    provider="Google",
+                    transcript=result["text"],
+                    wer=wer_percent,
+                    latency_ms=result["latency_ms"]
+                ))
+
+            except Exception as e:
+                results.append({
+                    "provider": "Google",
                     "text": "",
                     "wer": None,
                     "latency_ms": None,

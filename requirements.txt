@@ -10,3 +10,4 @@ azure-cognitiveservices-speech
 elevenlabs
 rev-ai
 sarvamai
+google-auth

@@ -9,6 +9,10 @@ class BenchmarkRun(Base):
     id = Column(Integer, primary_key=True, index=True)
     audio_filename = Column(String, nullable=False)
     reference_text = Column(String, nullable=False)
+
+    # ✅ NEW (optional, for Google / future AI4Bharat)
+    language_code = Column(String, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

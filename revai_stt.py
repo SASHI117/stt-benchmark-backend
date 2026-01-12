@@ -1,25 +1,40 @@
 import os
 import time
+import re
 import requests
 from rev_ai import apiclient
+
+
+def clean_revai_text(text: str) -> str:
+    """
+    Remove speaker labels, timestamps, and extra whitespace
+    from Rev.ai transcripts.
+    """
+    # Remove Speaker labels (Speaker 1, Speaker 2, etc.)
+    text = re.sub(r"Speaker\s+\d+", "", text)
+
+    # Remove timestamps like 00:00:00 or 00:00:00.000
+    text = re.sub(r"\b\d{2}:\d{2}:\d{2}(\.\d+)?\b", "", text)
+
+    # Normalize whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+
+    return text
 
 
 def transcribe(audio_path: str) -> dict:
     """
     Standardized Rev.ai STT transcription with language detection.
 
-    Args:
-        audio_path (str): Path to audio file
-
     Returns:
         dict: {
             "provider": "Rev.ai",
-            "text": "<transcript>",
+            "text": "<clean transcript>",
             "latency_ms": <float>
         }
     """
 
-    # -------- API KEY (ENV VARIABLE ONLY) --------
+    # -------- API KEY --------
     token = os.getenv("REVAI_API_KEY")
     if not token:
         raise RuntimeError("REVAI_API_KEY environment variable not set")
@@ -28,7 +43,6 @@ def transcribe(audio_path: str) -> dict:
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
     client = apiclient.RevAiAPIClient(token)
-
     start_time = time.time()
 
     # ================= LANGUAGE IDENTIFICATION =================
@@ -77,7 +91,8 @@ def transcribe(audio_path: str) -> dict:
             break
         time.sleep(1)
 
-    transcript_text = client.get_transcript_text(job.id)
+    raw_text = client.get_transcript_text(job.id)
+    transcript_text = clean_revai_text(raw_text)
 
     latency_ms = round((time.time() - start_time) * 1000, 2)
 

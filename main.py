@@ -106,14 +106,12 @@ def benchmark(
             try:
                 result = provider_func(audio_path)
 
-                wer_percent = round(
-                    word_error_rate(reference_text, result["text"]) * 100, 2
-                )
+                wer_value = word_error_rate(reference_text, result["text"])
 
                 results.append({
                     "provider": provider_name,
                     "text": result["text"],
-                    "wer": wer_percent,
+                    "wer": wer_value,
                     "latency_ms": result["latency_ms"],
                     "status": "success"
                 })
@@ -122,7 +120,7 @@ def benchmark(
                     run_id=run.id,
                     provider=provider_name,
                     transcript=result["text"],
-                    wer=wer_percent,
+                    wer=wer_value,
                     latency_ms=result["latency_ms"]
                 ))
 
@@ -150,14 +148,12 @@ def benchmark(
             try:
                 result = google(audio_path, language_code)
 
-                wer_percent = round(
-                    word_error_rate(reference_text, result["text"]) * 100, 2
-                )
+                wer_value = word_error_rate(reference_text, result["text"])
 
                 results.append({
                     "provider": "Google",
                     "text": result["text"],
-                    "wer": wer_percent,
+                    "wer": wer_value,
                     "latency_ms": result["latency_ms"],
                     "status": "success"
                 })
@@ -166,7 +162,7 @@ def benchmark(
                     run_id=run.id,
                     provider="Google",
                     transcript=result["text"],
-                    wer=wer_percent,
+                    wer=wer_value,
                     latency_ms=result["latency_ms"]
                 ))
 

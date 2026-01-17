@@ -9,7 +9,7 @@ load_dotenv(dotenv_path=".env", override=True)
 # ElevenLabs STT models
 ELEVENLABS_STT_MODELS = [
     "scribe_v1",
-    "scribe_v1_experimental"
+    "scribe_v2"
 ]
 
 def transcribe(audio_path: str) -> list[dict]:

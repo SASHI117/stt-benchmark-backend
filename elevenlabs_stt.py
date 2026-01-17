@@ -8,19 +8,28 @@ from elevenlabs.client import ElevenLabs
 load_dotenv(dotenv_path=".env", override=True)
 
 
-def transcribe(audio_path: str) -> dict:
-    """
-    Standardized ElevenLabs STT transcription function.
+# ✅ ElevenLabs STT models to benchmark
+ELEVENLABS_STT_MODELS = [
+    "scribe_v1",
+    "scribe_v2"   # ← second model (keep/remove based on availability)
+]
 
-    Args:
-        audio_path (str): Path to audio file
+
+def transcribe(audio_path: str) -> list[dict]:
+    """
+    Run ElevenLabs Speech-to-Text using multiple models.
 
     Returns:
-        dict: {
-            "provider": "ElevenLabs",
-            "text": "<transcript>",
-            "latency_ms": <float>
-        }
+        List of dicts:
+        [
+            {
+                "provider": "ElevenLabs",
+                "model": "<model_name>",
+                "text": "<transcript>",
+                "latency_ms": <float>
+            },
+            ...
+        ]
     """
 
     # -------- API KEY (ENV VARIABLE) --------
@@ -33,20 +42,24 @@ def transcribe(audio_path: str) -> dict:
 
     client = ElevenLabs(api_key=api_key)
 
-    start_time = time.time()
+    results = []
 
-    with open(audio_path, "rb") as audio_file:
-        response = client.speech_to_text.convert(
-            file=audio_file,
-            model_id="scribe_v1"
-        )
+    for model in ELEVENLABS_STT_MODELS:
+        start_time = time.time()
 
-    latency_ms = round((time.time() - start_time) * 1000, 2)
+        with open(audio_path, "rb") as audio_file:
+            response = client.speech_to_text.convert(
+                file=audio_file,
+                model_id=model
+            )
 
-    transcript_text = response.text
+        latency_ms = round((time.time() - start_time) * 1000, 2)
 
-    return {
-        "provider": "ElevenLabs",
-        "text": transcript_text,
-        "latency_ms": latency_ms
-    }
+        results.append({
+            "provider": "ElevenLabs",
+            "model": model,
+            "text": response.text,
+            "latency_ms": latency_ms
+        })
+
+    return results

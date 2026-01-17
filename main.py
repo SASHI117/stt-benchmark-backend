@@ -105,14 +105,14 @@ def benchmark(
             try:
                 provider_result = provider_func(audio_path)
 
-                # 🔹 MULTI-MODEL PROVIDER (OpenAI)
+                # 🔹 MULTI-MODEL PROVIDERS (OpenAI, ElevenLabs)
                 if isinstance(provider_result, list):
                     for r in provider_result:
                         wer_value = word_error_rate(reference_text, r["text"])
 
                         results.append({
                             "provider": r["provider"],
-                            "model": r["model"],
+                            "model": r.get("model"),
                             "text": r["text"],
                             "wer": wer_value,
                             "latency_ms": r["latency_ms"],
@@ -122,19 +122,19 @@ def benchmark(
                         db.add(BenchmarkResult(
                             run_id=run.id,
                             provider=r["provider"],
-                            model=r["model"],
+                            model=r.get("model"),
                             transcript=r["text"],
                             wer=wer_value,
                             latency_ms=r["latency_ms"]
                         ))
 
-                # 🔹 SINGLE-MODEL PROVIDER
+                # 🔹 SINGLE-MODEL PROVIDERS
                 else:
                     wer_value = word_error_rate(reference_text, provider_result["text"])
 
                     results.append({
                         "provider": provider_name,
-                        "model": None,
+                        "model": provider_result.get("model"),
                         "text": provider_result["text"],
                         "wer": wer_value,
                         "latency_ms": provider_result["latency_ms"],
@@ -144,7 +144,7 @@ def benchmark(
                     db.add(BenchmarkResult(
                         run_id=run.id,
                         provider=provider_name,
-                        model=None,
+                        model=provider_result.get("model"),
                         transcript=provider_result["text"],
                         wer=wer_value,
                         latency_ms=provider_result["latency_ms"]
@@ -179,7 +179,7 @@ def benchmark(
 
                 results.append({
                     "provider": "Google",
-                    "model": None,
+                    "model": result.get("model"),
                     "text": result["text"],
                     "wer": wer_value,
                     "latency_ms": result["latency_ms"],
@@ -189,7 +189,7 @@ def benchmark(
                 db.add(BenchmarkResult(
                     run_id=run.id,
                     provider="Google",
-                    model=None,
+                    model=result.get("model"),
                     transcript=result["text"],
                     wer=wer_value,
                     latency_ms=result["latency_ms"]

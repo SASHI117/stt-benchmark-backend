@@ -3,6 +3,7 @@ import time
 import requests
 
 SONIOX_API = "https://api.soniox.com"
+MODEL = "stt-async-v3"
 
 
 def transcribe(audio_path: str) -> dict:
@@ -15,6 +16,7 @@ def transcribe(audio_path: str) -> dict:
     Returns:
         dict: {
             "provider": "Soniox",
+            "model": "stt-async-v3",
             "text": "<transcript>",
             "latency_ms": <float>
         }
@@ -46,7 +48,7 @@ def transcribe(audio_path: str) -> dict:
 
     # ================= STEP 2: Create Transcription =================
     payload = {
-        "model": "stt-async-v3",
+        "model": MODEL,
         "file_id": file_id,
         "enable_language_identification": True
     }
@@ -89,6 +91,7 @@ def transcribe(audio_path: str) -> dict:
 
     return {
         "provider": "Soniox",
+        "model": MODEL,          # ✅ ADDED
         "text": transcript_text,
         "latency_ms": latency_ms
     }

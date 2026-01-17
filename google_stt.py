@@ -43,7 +43,6 @@ def transcribe(audio_path: str, language_code: str) -> dict:
     payload = {
         "config": {
             "encoding": "LINEAR16",
-            "sampleRateHertz": 16000,
             "languageCode": language_code
         },
         "audio": {

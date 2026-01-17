@@ -6,16 +6,6 @@ import azure.cognitiveservices.speech as speechsdk
 def transcribe(audio_path: str) -> dict:
     """
     Standardized Azure Speech-to-Text transcription with auto language detection.
-
-    Args:
-        audio_path (str): Path to audio file
-
-    Returns:
-        dict: {
-            "provider": "Azure",
-            "text": "<transcript>",
-            "latency_ms": <float>
-        }
     """
 
     # -------- API KEYS (ENV VARIABLES ONLY) --------
@@ -41,7 +31,6 @@ def transcribe(audio_path: str) -> dict:
         "ta-IN"
     ]
 
-    # Compatible with OLD + NEW SDKs
     try:
         auto_detect_config = speechsdk.AutoDetectSourceLanguageConfig.from_languages(
             candidate_languages
@@ -79,6 +68,7 @@ def transcribe(audio_path: str) -> dict:
 
     return {
         "provider": "Azure",
+        "model": "azure-stt-auto-lang",  # ✅ ADDED
         "text": transcript_text,
         "latency_ms": latency_ms
     }

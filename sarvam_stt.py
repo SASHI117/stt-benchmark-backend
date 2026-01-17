@@ -42,7 +42,6 @@ def transcribe(audio_path: str) -> dict:
 
     transcript_text = ""
 
-    # ✅ CORRECT OUTPUT HANDLING
     with tempfile.TemporaryDirectory() as tmpdir:
         job.download_outputs(output_dir=tmpdir)
 
@@ -54,6 +53,7 @@ def transcribe(audio_path: str) -> dict:
 
     return {
         "provider": "Sarvam",
+        "model": MODEL,            # ✅ ADDED
         "text": transcript_text,
         "latency_ms": latency_ms
     }

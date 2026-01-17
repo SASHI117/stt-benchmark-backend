@@ -10,28 +10,15 @@ def clean_revai_text(text: str) -> str:
     Remove speaker labels, timestamps, and extra whitespace
     from Rev.ai transcripts.
     """
-    # Remove Speaker labels (Speaker 1, Speaker 2, etc.)
     text = re.sub(r"Speaker\s+\d+", "", text)
-
-    # Remove timestamps like 00:00:00 or 00:00:00.000
     text = re.sub(r"\b\d{2}:\d{2}:\d{2}(\.\d+)?\b", "", text)
-
-    # Normalize whitespace
     text = re.sub(r"\s+", " ", text).strip()
-
     return text
 
 
 def transcribe(audio_path: str) -> dict:
     """
     Standardized Rev.ai STT transcription with language detection.
-
-    Returns:
-        dict: {
-            "provider": "Rev.ai",
-            "text": "<clean transcript>",
-            "latency_ms": <float>
-        }
     """
 
     # -------- API KEY --------
@@ -98,6 +85,7 @@ def transcribe(audio_path: str) -> dict:
 
     return {
         "provider": "Rev.ai",
+        "model": "machine",   # ✅ CORRECTED
         "text": transcript_text,
         "latency_ms": latency_ms
     }

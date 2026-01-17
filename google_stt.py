@@ -8,17 +8,6 @@ def transcribe(audio_path: str, language_code: str) -> dict:
     """
     Standardized Google Speech-to-Text transcription.
     Language code is REQUIRED (Google does not auto-detect).
-
-    Args:
-        audio_path (str): Path to audio file
-        language_code (str): ISO language code (e.g., te-IN, en-US)
-
-    Returns:
-        dict: {
-            "provider": "Google",
-            "text": "<transcript>",
-            "latency_ms": <float>
-        }
     """
 
     # -------- API KEY (ENV VARIABLE ONLY) --------
@@ -39,7 +28,7 @@ def transcribe(audio_path: str, language_code: str) -> dict:
         audio_bytes = audio_file.read()
         audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
 
-    # -------- REQUEST PAYLOAD (CORE LOGIC SAME) --------
+    # -------- REQUEST PAYLOAD --------
     payload = {
         "config": {
             "encoding": "LINEAR16",
@@ -71,6 +60,7 @@ def transcribe(audio_path: str, language_code: str) -> dict:
 
     return {
         "provider": "Google",
+        "model": "google-stt-standard",  # ✅ ADDED
         "text": transcript_text,
         "latency_ms": latency_ms
     }

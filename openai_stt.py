@@ -3,22 +3,32 @@ import time
 from openai import OpenAI
 
 
-def transcribe(audio_path: str) -> dict:
-    """
-    Standardized OpenAI STT transcription function.
+# OpenAI STT models you want to benchmark
+OPENAI_STT_MODELS = [
+    "gpt-4o-transcribe",
+    "gpt-4o-mini-transcribe",
+    "whisper-1"
+]
 
-    Args:
-        audio_path (str): Path to audio file
+
+def transcribe(audio_path: str) -> list[dict]:
+    """
+    Run OpenAI Speech-to-Text using multiple models.
 
     Returns:
-        dict: {
-            "provider": "OpenAI",
-            "text": "<transcript>",
-            "latency_ms": <float>
-        }
+        List of dicts:
+        [
+            {
+                "provider": "OpenAI",
+                "model": "<model_name>",
+                "text": "<transcript>",
+                "latency_ms": <float>
+            },
+            ...
+        ]
     """
 
-    # -------- API KEY (ENV VARIABLE ONLY) --------
+    # -------- API KEY --------
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY environment variable not set")
@@ -28,20 +38,24 @@ def transcribe(audio_path: str) -> dict:
 
     client = OpenAI(api_key=api_key)
 
-    start_time = time.time()
+    results = []
 
-    with open(audio_path, "rb") as audio_file:
-        transcription = client.audio.transcriptions.create(
-            model="gpt-4o-transcribe",
-            file=audio_file
-        )
+    for model in OPENAI_STT_MODELS:
+        start_time = time.time()
 
-    latency_ms = round((time.time() - start_time) * 1000, 2)
+        with open(audio_path, "rb") as audio_file:
+            transcription = client.audio.transcriptions.create(
+                model=model,
+                file=audio_file
+            )
 
-    transcript_text = transcription.text
+        latency_ms = round((time.time() - start_time) * 1000, 2)
 
-    return {
-        "provider": "OpenAI",
-        "text": transcript_text,
-        "latency_ms": latency_ms
-    }
+        results.append({
+            "provider": "OpenAI",
+            "model": model,
+            "text": transcription.text,
+            "latency_ms": latency_ms
+        })
+
+    return results

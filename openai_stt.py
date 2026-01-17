@@ -1,9 +1,10 @@
 import os
 import time
+from typing import List, Dict
 from openai import OpenAI
 
 
-# OpenAI STT models you want to benchmark
+# ================= OPENAI STT MODELS =================
 OPENAI_STT_MODELS = [
     "gpt-4o-transcribe",
     "gpt-4o-mini-transcribe",
@@ -11,24 +12,22 @@ OPENAI_STT_MODELS = [
 ]
 
 
-def transcribe(audio_path: str) -> list[dict]:
+def transcribe(audio_path: str) -> List[Dict]:
     """
     Run OpenAI Speech-to-Text using multiple models.
 
     Returns:
-        List of dicts:
         [
             {
                 "provider": "OpenAI",
                 "model": "<model_name>",
                 "text": "<transcript>",
                 "latency_ms": <float>
-            },
-            ...
+            }
         ]
     """
 
-    # -------- API KEY --------
+    # -------- API KEY (ENV ONLY) --------
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY environment variable not set")
@@ -38,24 +37,35 @@ def transcribe(audio_path: str) -> list[dict]:
 
     client = OpenAI(api_key=api_key)
 
-    results = []
+    results: List[Dict] = []
 
     for model in OPENAI_STT_MODELS:
-        start_time = time.time()
+        try:
+            start_time = time.time()
 
-        with open(audio_path, "rb") as audio_file:
-            transcription = client.audio.transcriptions.create(
-                model=model,
-                file=audio_file
-            )
+            with open(audio_path, "rb") as audio_file:
+                transcription = client.audio.transcriptions.create(
+                    model=model,
+                    file=audio_file
+                )
 
-        latency_ms = round((time.time() - start_time) * 1000, 2)
+            latency_ms = round((time.time() - start_time) * 1000, 2)
 
-        results.append({
-            "provider": "OpenAI",
-            "model": model,
-            "text": transcription.text,
-            "latency_ms": latency_ms
-        })
+            results.append({
+                "provider": "OpenAI",
+                "model": model,
+                "text": transcription.text,
+                "latency_ms": latency_ms
+            })
+
+        except Exception as e:
+            # Individual model failure should NOT break other models
+            results.append({
+                "provider": "OpenAI",
+                "model": model,
+                "text": "",
+                "latency_ms": None,
+                "error": str(e)
+            })
 
     return results

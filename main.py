@@ -24,7 +24,7 @@ from openai_stt import transcribe as openai
 from revai_stt import transcribe as revai
 from sarvam_stt import transcribe as sarvam
 from soniox_stt import transcribe as soniox
-from google_stt import transcribe as google  # ✅ Google
+from google_stt import transcribe as google
 
 # ================= FASTAPI APP =================
 app = FastAPI(
@@ -67,7 +67,7 @@ def health():
 def benchmark(
     audio: UploadFile = File(...),
     reference_text: str = Form(...),
-    language_code: Optional[str] = Form(None),  # ✅ Google only
+    language_code: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     if not reference_text.strip():
@@ -80,7 +80,6 @@ def benchmark(
     if not audio.filename.lower().endswith(allowed_extensions):
         raise HTTPException(status_code=400, detail="Unsupported audio format")
 
-    # Normalize empty string
     if language_code is not None:
         language_code = language_code.strip() or None
 
@@ -104,29 +103,57 @@ def benchmark(
         # ===== AUTO PROVIDERS =====
         for provider_name, provider_func in AUTO_PROVIDERS:
             try:
-                result = provider_func(audio_path)
+                provider_result = provider_func(audio_path)
 
-                wer_value = word_error_rate(reference_text, result["text"])
+                # 🔹 MULTI-MODEL PROVIDER (OpenAI)
+                if isinstance(provider_result, list):
+                    for r in provider_result:
+                        wer_value = word_error_rate(reference_text, r["text"])
 
-                results.append({
-                    "provider": provider_name,
-                    "text": result["text"],
-                    "wer": wer_value,
-                    "latency_ms": result["latency_ms"],
-                    "status": "success"
-                })
+                        results.append({
+                            "provider": r["provider"],
+                            "model": r["model"],
+                            "text": r["text"],
+                            "wer": wer_value,
+                            "latency_ms": r["latency_ms"],
+                            "status": "success"
+                        })
 
-                db.add(BenchmarkResult(
-                    run_id=run.id,
-                    provider=provider_name,
-                    transcript=result["text"],
-                    wer=wer_value,
-                    latency_ms=result["latency_ms"]
-                ))
+                        db.add(BenchmarkResult(
+                            run_id=run.id,
+                            provider=r["provider"],
+                            model=r["model"],
+                            transcript=r["text"],
+                            wer=wer_value,
+                            latency_ms=r["latency_ms"]
+                        ))
+
+                # 🔹 SINGLE-MODEL PROVIDER
+                else:
+                    wer_value = word_error_rate(reference_text, provider_result["text"])
+
+                    results.append({
+                        "provider": provider_name,
+                        "model": None,
+                        "text": provider_result["text"],
+                        "wer": wer_value,
+                        "latency_ms": provider_result["latency_ms"],
+                        "status": "success"
+                    })
+
+                    db.add(BenchmarkResult(
+                        run_id=run.id,
+                        provider=provider_name,
+                        model=None,
+                        transcript=provider_result["text"],
+                        wer=wer_value,
+                        latency_ms=provider_result["latency_ms"]
+                    ))
 
             except Exception as e:
                 results.append({
                     "provider": provider_name,
+                    "model": None,
                     "text": "",
                     "wer": None,
                     "latency_ms": None,
@@ -134,10 +161,11 @@ def benchmark(
                     "error": str(e)
                 })
 
-        # ===== GOOGLE STT (MANDATORY LANGUAGE) =====
+        # ===== GOOGLE STT =====
         if language_code is None:
             results.append({
                 "provider": "Google",
+                "model": None,
                 "text": "",
                 "wer": None,
                 "latency_ms": None,
@@ -147,11 +175,11 @@ def benchmark(
         else:
             try:
                 result = google(audio_path, language_code)
-
                 wer_value = word_error_rate(reference_text, result["text"])
 
                 results.append({
                     "provider": "Google",
+                    "model": None,
                     "text": result["text"],
                     "wer": wer_value,
                     "latency_ms": result["latency_ms"],
@@ -161,6 +189,7 @@ def benchmark(
                 db.add(BenchmarkResult(
                     run_id=run.id,
                     provider="Google",
+                    model=None,
                     transcript=result["text"],
                     wer=wer_value,
                     latency_ms=result["latency_ms"]
@@ -169,6 +198,7 @@ def benchmark(
             except Exception as e:
                 results.append({
                     "provider": "Google",
+                    "model": None,
                     "text": "",
                     "wer": None,
                     "latency_ms": None,

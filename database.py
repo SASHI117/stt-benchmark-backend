@@ -7,13 +7,15 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# 🔹 Fallback to SQLite if DATABASE_URL not set
+# 🔹 Fallback to SQLite for local/dev only
 if not DATABASE_URL:
     DATABASE_URL = "sqlite:///./stt_benchmark.db"
 
+# 🔥 FIX: Railway/Postgres-safe engine configuration
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+    pool_pre_ping=True,   # prevents SSL EOF errors
+    pool_recycle=300     # avoids stale connections
 )
 
 SessionLocal = sessionmaker(

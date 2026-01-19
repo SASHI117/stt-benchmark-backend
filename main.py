@@ -83,14 +83,14 @@ def benchmark(
     if language_code is not None:
         language_code = language_code.strip() or None
 
-    # ---------- CREATE RUN (NO EARLY COMMIT) ----------
+    # ---------- CREATE RUN ----------
     run = BenchmarkRun(
         audio_filename=audio.filename,
         reference_text=reference_text,
         language_code=language_code
     )
     db.add(run)
-    db.flush()  # ✅ get run.id safely without committing
+    db.flush()  # get run.id safely
 
     results = []
 
@@ -105,7 +105,7 @@ def benchmark(
             try:
                 provider_result = provider_func(audio_path)
 
-                # 🔹 MULTI-MODEL PROVIDERS
+                # MULTI-MODEL
                 if isinstance(provider_result, list):
                     for r in provider_result:
                         wer_value = word_error_rate(reference_text, r["text"])
@@ -123,12 +123,12 @@ def benchmark(
                             run_id=run.id,
                             provider=r["provider"],
                             model=r.get("model"),
-                            text=r["text"],        # ✅ FIXED
+                            transcript=r["text"],   # ✅ FIX
                             wer=wer_value,
                             latency_ms=r["latency_ms"]
                         ))
 
-                # 🔹 SINGLE-MODEL PROVIDERS
+                # SINGLE-MODEL
                 else:
                     wer_value = word_error_rate(reference_text, provider_result["text"])
 
@@ -145,7 +145,7 @@ def benchmark(
                         run_id=run.id,
                         provider=provider_name,
                         model=provider_result.get("model"),
-                        text=provider_result["text"],   # ✅ FIXED
+                        transcript=provider_result["text"],  # ✅ FIX
                         wer=wer_value,
                         latency_ms=provider_result["latency_ms"]
                     ))
@@ -190,7 +190,7 @@ def benchmark(
                     run_id=run.id,
                     provider="Google",
                     model=result.get("model"),
-                    text=result["text"],      # ✅ FIXED
+                    transcript=result["text"],  # ✅ FIX
                     wer=wer_value,
                     latency_ms=result["latency_ms"]
                 ))
@@ -206,7 +206,7 @@ def benchmark(
                     "error": str(e)
                 })
 
-        # ---------- SINGLE FINAL COMMIT ----------
+        # ---------- FINAL COMMIT ----------
         db.commit()
 
     finally:

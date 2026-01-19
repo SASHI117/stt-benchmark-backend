@@ -83,14 +83,14 @@ def benchmark(
     if language_code is not None:
         language_code = language_code.strip() or None
 
-    # ---------- CREATE RUN ----------
+    # ---------- CREATE RUN (NO EARLY COMMIT) ----------
     run = BenchmarkRun(
         audio_filename=audio.filename,
-        reference_text=reference_text
+        reference_text=reference_text,
+        language_code=language_code
     )
     db.add(run)
-    db.commit()
-    db.refresh(run)
+    db.flush()  # ✅ get run.id safely without committing
 
     results = []
 
@@ -105,7 +105,7 @@ def benchmark(
             try:
                 provider_result = provider_func(audio_path)
 
-                # 🔹 MULTI-MODEL PROVIDERS (OpenAI, ElevenLabs)
+                # 🔹 MULTI-MODEL PROVIDERS
                 if isinstance(provider_result, list):
                     for r in provider_result:
                         wer_value = word_error_rate(reference_text, r["text"])
@@ -123,7 +123,7 @@ def benchmark(
                             run_id=run.id,
                             provider=r["provider"],
                             model=r.get("model"),
-                            transcript=r["text"],
+                            text=r["text"],        # ✅ FIXED
                             wer=wer_value,
                             latency_ms=r["latency_ms"]
                         ))
@@ -145,7 +145,7 @@ def benchmark(
                         run_id=run.id,
                         provider=provider_name,
                         model=provider_result.get("model"),
-                        transcript=provider_result["text"],
+                        text=provider_result["text"],   # ✅ FIXED
                         wer=wer_value,
                         latency_ms=provider_result["latency_ms"]
                     ))
@@ -190,7 +190,7 @@ def benchmark(
                     run_id=run.id,
                     provider="Google",
                     model=result.get("model"),
-                    transcript=result["text"],
+                    text=result["text"],      # ✅ FIXED
                     wer=wer_value,
                     latency_ms=result["latency_ms"]
                 ))
@@ -206,6 +206,7 @@ def benchmark(
                     "error": str(e)
                 })
 
+        # ---------- SINGLE FINAL COMMIT ----------
         db.commit()
 
     finally:

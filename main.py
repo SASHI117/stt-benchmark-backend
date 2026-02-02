@@ -25,6 +25,7 @@ from revai_stt import transcribe as revai
 from sarvam_stt import transcribe as sarvam
 from soniox_stt import transcribe as soniox
 from google_stt import transcribe as google
+from ai4bharat_stt import transcribe as ai4bharat
 
 # ================= FASTAPI APP =================
 app = FastAPI(
@@ -55,6 +56,7 @@ AUTO_PROVIDERS = [
     ("Rev.ai", revai),
     ("Sarvam", sarvam),
     ("Soniox", soniox),
+    ("AI4Bharat", ai4bharat),
 ]
 
 # ================= HEALTH =================

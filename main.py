@@ -56,7 +56,6 @@ AUTO_PROVIDERS = [
     ("Rev.ai", revai),
     ("Sarvam", sarvam),
     ("Soniox", soniox),
-    ("AI4Bharat", ai4bharat),
 ]
 
 # ================= HEALTH =================
@@ -200,6 +199,50 @@ def benchmark(
             except Exception as e:
                 results.append({
                     "provider": "Google",
+                    "model": None,
+                    "text": "",
+                    "wer": None,
+                    "latency_ms": None,
+                    "status": "failed",
+                    "error": str(e)
+                })
+        # ===== AI4BHARAT STT =====
+        if language_code is None:
+            results.append({
+                "provider": "AI4Bharat",
+                "model": None,
+                "text": "",
+                "wer": None,
+                "latency_ms": None,
+                "status": "skipped",
+                "error": "language_code is required for AI4Bharat"
+            })
+        else:
+            try:
+                result = ai4bharat(audio_path, language_code)
+                wer_value = word_error_rate(reference_text, result["text"])
+
+                results.append({
+                    "provider": "AI4Bharat",
+                    "model": result.get("model"),
+                    "text": result["text"],
+                    "wer": wer_value,
+                    "latency_ms": result["latency_ms"],
+                    "status": "success"
+                })
+
+                db.add(BenchmarkResult(
+                    run_id=run.id,
+                    provider="AI4Bharat",
+                    model=result.get("model"),
+                    transcript=result["text"],
+                    wer=wer_value,
+                    latency_ms=result["latency_ms"]
+                ))
+
+            except Exception as e:
+                results.append({
+                    "provider": "AI4Bharat",
                     "model": None,
                     "text": "",
                     "wer": None,

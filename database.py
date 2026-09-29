@@ -1,58 +1,43 @@
+import logging
 import os
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, declarative_base
+
 from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+logger = logging.getLogger(__name__)
 
-# 🔹 Fallback to SQLite for local/dev only
-if not DATABASE_URL:
-    DATABASE_URL = "sqlite:///./stt_benchmark.db"
+# Railway-managed PostgreSQL in production; SQLite for local development.
+DATABASE_URL = os.getenv("DATABASE_URL") or "sqlite:///./stt_benchmark.db"
 
-# 🧪 DEBUG: Print DB URL (safe – password masked by Railway logs)
-print("🔍 DATABASE_URL IN USE:", DATABASE_URL)
+# Some hosts still hand out the pre-SQLAlchemy-1.4 "postgres://" scheme.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# 🔥 Railway/Postgres-safe engine configuration
+_is_sqlite = DATABASE_URL.startswith("sqlite")
+
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=300,
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
 )
 
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
 
-def init_db():
-    """
-    Create tables if they do not exist.
-    Safe to run multiple times.
-    """
-    from models import BenchmarkRun, BenchmarkResult
+def init_db() -> None:
+    """Create tables if they do not exist. Safe to run multiple times."""
+    import models  # noqa: F401  (registers tables on Base.metadata)
+
     Base.metadata.create_all(bind=engine)
-
-    # 🧪 DEBUG: Confirm connected DB + schema + table columns
-    with engine.connect() as conn:
-        db_name = conn.execute(text("SELECT current_database();")).scalar()
-        schema = conn.execute(text("SELECT current_schema();")).scalar()
-
-        print("🧪 Connected database:", db_name)
-        print("🧪 Active schema:", schema)
-
-        cols = conn.execute(text("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_name = 'benchmark_results';
-        """)).fetchall()
-
-        print("🧪 benchmark_results columns:", [c[0] for c in cols])
+    # Never log the raw URL: it carries the database password.
+    logger.info("Database ready: %s", make_url(DATABASE_URL).render_as_string(hide_password=True))
 
 
 def get_db():

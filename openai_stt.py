@@ -1,7 +1,6 @@
 import os
 import time
 from typing import List, Dict
-from openai import OpenAI
 
 
 # ================= OPENAI STT MODELS =================
@@ -26,6 +25,8 @@ def transcribe(audio_path: str) -> List[Dict]:
             }
         ]
     """
+
+    from openai import OpenAI
 
     # -------- API KEY (ENV ONLY) --------
     api_key = os.getenv("OPENAI_API_KEY")

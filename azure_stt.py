@@ -1,12 +1,13 @@
 import os
 import time
-import azure.cognitiveservices.speech as speechsdk
 
 
 def transcribe(audio_path: str) -> dict:
     """
     Standardized Azure Speech-to-Text transcription with auto language detection.
     """
+
+    import azure.cognitiveservices.speech as speechsdk
 
     # -------- API KEYS (ENV VARIABLES ONLY) --------
     speech_key = os.getenv("SPEECH_KEY")

@@ -2,7 +2,6 @@ import os
 import time
 import json
 from pathlib import Path
-from sarvamai import SarvamAI
 import tempfile
 
 MODEL = "saarika:v2.5"
@@ -13,6 +12,8 @@ def transcribe(audio_path: str) -> dict:
     Standardized Sarvam STT transcription function
     (correct parsing based on actual SDK output)
     """
+
+    from sarvamai import SarvamAI
 
     api_key = os.getenv("SARVAM_API_KEY")
     if not api_key:

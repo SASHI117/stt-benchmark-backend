@@ -1,10 +1,5 @@
 import os
 import time
-from dotenv import load_dotenv
-from elevenlabs.client import ElevenLabs
-
-# Load environment variables
-load_dotenv(dotenv_path=".env", override=True)
 
 # ElevenLabs STT models
 ELEVENLABS_STT_MODELS = [
@@ -28,6 +23,8 @@ def transcribe(audio_path: str) -> list[dict]:
         ]
     """
 
+    from elevenlabs.client import ElevenLabs
+
     api_key = os.getenv("ELEVENLABS_API_KEY")
     if not api_key:
         raise RuntimeError("ELEVENLABS_API_KEY environment variable not set")
@@ -40,21 +37,32 @@ def transcribe(audio_path: str) -> list[dict]:
     results = []
 
     for model_id in ELEVENLABS_STT_MODELS:
-        start_time = time.time()
+        try:
+            start_time = time.time()
 
-        with open(audio_path, "rb") as audio_file:
-            response = client.speech_to_text.convert(
-                file=audio_file,
-                model_id=model_id
-            )
+            with open(audio_path, "rb") as audio_file:
+                response = client.speech_to_text.convert(
+                    file=audio_file,
+                    model_id=model_id
+                )
 
-        latency_ms = round((time.time() - start_time) * 1000, 2)
+            latency_ms = round((time.time() - start_time) * 1000, 2)
 
-        results.append({
-            "provider": "ElevenLabs",
-            "model": model_id,
-            "text": response.text,
-            "latency_ms": latency_ms
-        })
+            results.append({
+                "provider": "ElevenLabs",
+                "model": model_id,
+                "text": response.text,
+                "latency_ms": latency_ms
+            })
+
+        except Exception as e:
+            # One model failing should not hide the other model's result
+            results.append({
+                "provider": "ElevenLabs",
+                "model": model_id,
+                "text": "",
+                "latency_ms": None,
+                "error": str(e)
+            })
 
     return results

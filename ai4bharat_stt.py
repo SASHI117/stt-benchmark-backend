@@ -2,6 +2,8 @@ import os
 import time
 import requests
 
+from polling import HTTP_TIMEOUT_S
+
 
 def transcribe(audio_path: str, language_code: str) -> dict:
     """
@@ -38,7 +40,7 @@ def transcribe(audio_path: str, language_code: str) -> dict:
             api_url,
             headers=headers,
             files=files,
-            timeout=120
+            timeout=HTTP_TIMEOUT_S
         )
 
         latency_ms = round((time.time() - start_time) * 1000, 2)

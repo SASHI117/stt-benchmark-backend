@@ -2,6 +2,8 @@ import os
 import time
 import requests
 
+from polling import HTTP_TIMEOUT_S, poll_until
+
 SONIOX_API = "https://api.soniox.com"
 MODEL = "stt-async-v3"
 
@@ -41,7 +43,8 @@ def transcribe(audio_path: str) -> dict:
         res = requests.post(
             f"{SONIOX_API}/v1/files",
             headers=headers,
-            files={"file": f}
+            files={"file": f},
+            timeout=HTTP_TIMEOUT_S,
         )
     res.raise_for_status()
     file_id = res.json()["id"]
@@ -56,31 +59,34 @@ def transcribe(audio_path: str) -> dict:
     res = requests.post(
         f"{SONIOX_API}/v1/transcriptions",
         headers=headers,
-        json=payload
+        json=payload,
+        timeout=HTTP_TIMEOUT_S,
     )
     res.raise_for_status()
     transcription_id = res.json()["id"]
 
     # ================= STEP 3: Wait for Result =================
-    while True:
-        res = requests.get(
+    def fetch_status():
+        r = requests.get(
             f"{SONIOX_API}/v1/transcriptions/{transcription_id}",
-            headers=headers
+            headers=headers,
+            timeout=HTTP_TIMEOUT_S,
         )
-        res.raise_for_status()
-        data = res.json()
+        r.raise_for_status()
+        return r.json()
 
-        if data["status"] == "completed":
-            break
-        elif data["status"] == "error":
-            raise RuntimeError("Soniox transcription failed")
-
-        time.sleep(1)
+    poll_until(
+        fetch_status,
+        is_done=lambda d: d["status"] == "completed",
+        is_failed=lambda d: d["status"] == "error",
+        what="Soniox transcription",
+    )
 
     # ================= STEP 4: Get Transcript =================
     res = requests.get(
         f"{SONIOX_API}/v1/transcriptions/{transcription_id}/transcript",
-        headers=headers
+        headers=headers,
+        timeout=HTTP_TIMEOUT_S,
     )
     res.raise_for_status()
     transcript = res.json()

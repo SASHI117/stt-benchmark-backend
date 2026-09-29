@@ -1,7 +1,6 @@
 import os
 import time
-from typing import List, Dict
-
+from typing import Dict, List
 
 # ================= OPENAI STT MODELS =================
 OPENAI_STT_MODELS = [

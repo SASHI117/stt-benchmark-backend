@@ -1,6 +1,8 @@
-from sqlalchemy import Column, Integer, String, Float, Text, DateTime, ForeignKey
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.sql import func
+
 from database import Base
+
 
 class BenchmarkRun(Base):
     __tablename__ = "benchmark_runs"

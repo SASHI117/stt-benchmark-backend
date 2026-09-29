@@ -1,7 +1,8 @@
 import base64
-import requests
-import time
 import os
+import time
+
+import requests
 
 from polling import HTTP_TIMEOUT_S
 

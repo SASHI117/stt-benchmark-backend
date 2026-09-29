@@ -1,182 +1,169 @@
-# Benchmarking_STT_backend
+# STT Benchmark — Backend
 
-FastAPI-based backend service for the **Farm Vaidya Speech-to-Text Benchmarking Platform**, integrating multiple Speech-to-Text (STT) providers to evaluate transcription accuracy (WER), latency, and performance via REST APIs.
+[![CI](https://github.com/SASHI117/stt-benchmark-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/SASHI117/stt-benchmark-backend/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
+![FastAPI](https://img.shields.io/badge/FastAPI-REST-009688)
 
----
+A FastAPI service that sends one audio clip to eight speech-to-text providers
+(eleven models) and scores each transcript against a reference with **word
+error rate** and **latency**. I built it during my internship at FarmVaidya.ai
+to choose an ASR engine for Telugu/Hindi farmer conversations. The question
+it answers is *which provider is accurate enough, fast enough, on our audio*,
+not on a vendor's English benchmark.
 
-## 📌 Overview
+The web UI lives in [stt-benchmark-frontend](https://github.com/SASHI117/stt-benchmark-frontend).
+The self-hosted AI4Bharat model it calls is [ai4bharat_stt](https://github.com/SASHI117/ai4bharat_stt).
 
-This backend is designed to benchmark multiple Speech-to-Text providers using the **same audio input**, enabling fair comparison across models.
-The service exposes REST APIs that accept audio files and return transcription results along with accuracy and latency metrics.
+## Architecture
 
----
-
-## 🧱 Technology Stack
-
-* **Language:** Python 3.10+
-* **Framework:** FastAPI
-* **API Architecture:** REST
-* **Database:** PostgreSQL (Railway managed) with SQLite fallback
-* **Deployment Platform:** Railway
-* **Version Control:** GitHub (FarmVaidya Organization)
-
----
-
-## 📂 Project Structure
-
-```
-Benchmarking_STT_backend/
-├── metrics/
-│   ├── text_normalize.py
-│   └── wer.py
-├── azure_stt.py
-├── elevenlabs_stt.py
-├── google_stt.py
-├── openai_stt.py
-├── revai_stt.py
-├── sarvam_stt.py
-├── soniox_stt.py
-├── database.py
-├── models.py
-├── create_tables.py
-├── main.py
-├── requirements.txt
-├── README.md
+```mermaid
+flowchart LR
+    UI[Static web UI] -- "multipart: audio + reference + language" --> API["/benchmark (FastAPI)"]
+    API --> POOL{{ThreadPoolExecutor}}
+    POOL --> AZ[Azure Speech]
+    POOL --> OA["OpenAI: gpt-4o-transcribe,<br/>gpt-4o-mini-transcribe, whisper-1"]
+    POOL --> EL["ElevenLabs: scribe_v1, scribe_v2"]
+    POOL --> RV[Rev.ai]
+    POOL --> SV["Sarvam saarika:v2.5"]
+    POOL --> SX["Soniox stt-async-v3"]
+    POOL --> GG["Google STT *"]
+    POOL --> AI["AI4Bharat IndicConformer *<br/>(self-hosted)"]
+    POOL --> WER[normalize → WER]
+    WER --> DB[(PostgreSQL / SQLite)]
+    WER --> UI
 ```
 
----
+`*` needs an explicit `language_code`. The others detect the language themselves.
 
-## 🚀 Deployment Flow (Exact Steps Used)
+| Module | Responsibility |
+|---|---|
+| `main.py` | Request validation, the provider table, concurrent fan-out, persistence |
+| `*_stt.py` | One adapter per provider. Each returns `{provider, model, text, latency_ms}` (or a list for multi-model providers) |
+| `polling.py` | `poll_until()`: deadline-bounded polling for async job APIs (Rev.ai, Soniox) |
+| `metrics/` | Unicode-aware text normalization and Levenshtein WER |
+| `database.py`, `models.py` | SQLAlchemy engine, `benchmark_runs` / `benchmark_results` tables |
 
-### 1️⃣ GitHub Repository
+## How a request is scored
 
-* Backend code is stored in the **FarmVaidya GitHub organization**
-* Repository name:
-  **`Benchmarking_STT_backend`**
-* No api keys or `.env` file are committed to GitHub
+1. The upload is written to a temp file **with its original extension**, since
+   several SDKs pick the decoder from it.
+2. Every provider runs concurrently. Each adapter times only its own call, so
+   the reported latency is per provider. The total request time is the
+   slowest provider, not the sum of all of them.
+3. Each transcript and the reference are normalized: NFC → casefold →
+   remove Unicode punctuation/symbols/format characters → collapse whitespace.
+4. WER = (substitutions + deletions + insertions) / reference words, computed
+   by word-level Levenshtein distance. It can exceed 1.0 when a provider
+   hallucinates extra words.
+5. Successful rows are written to the database. Failures come back with
+   `status: failed|skipped` and an `error` message instead of a fake score.
 
----
+### Why normalization is by Unicode category
 
-### 2️⃣ Railway Deployment
+The first version stripped punctuation with `re.sub(r"[^\w\s]", "", text)`.
+Python's `\w` does **not** match combining marks, and Indic vowel signs
+(matras) and viramas are combining marks. The normalizer therefore deleted
+them, and different words collapsed into the same string:
 
-The backend is deployed by **directly connecting Railway to the GitHub repository**.
-
-Steps:
-
-1. Open **Railway**
-2. Click **New Project**
-3. Select **Deploy from GitHub**
-4. Choose:
-
-   ```
-   farmvaidya-ai / Benchmarking_STT_backend
-   ```
-5. Railway automatically:
-
-   * Detects a Python project
-   * Installs dependencies from `requirements.txt`
-   * Starts the FastAPI app
-
----
-
-### 3️⃣ Environment Variables Configuration
-
-All secrets are added directly in **Railway → Service → Variables**.
-
-Variables configured:
-
-```
-OPENAI_API_KEY
-ELEVENLABS_API_KEY
-GOOGLE_STT_API_KEY
-REVAI_API_KEY
-SARVAM_API_KEY
-SONIOX_API_KEY
-SPEECH_KEY
-ENDPOINT
+```text
+reference   किसान भाई      →  कसन भई
+hypothesis  कसान भई  (wrong) →  कसन भई
+WER = 0.0
 ```
 
-✔ No `.env` file in GitHub
-✔ Secrets injected securely at runtime by Railway
+Every Hindi/Telugu/Tamil score was optimistic. The fix removes characters
+by category (`P*`, `S*`, `Cf`), and `tests/test_metrics.py` pins the
+regression.
 
----
+## API
 
-### 4️⃣ Application Start
+### `POST /benchmark`
 
-Railway automatically runs the backend using:
+| field | type | required |
+|---|---|---|
+| `audio` | file (`.wav .mp3 .m4a .flac .ogg .webm`) | yes |
+| `reference_text` | string | yes |
+| `language_code` | BCP-47, e.g. `te-IN` | no (Google and AI4Bharat are skipped without it) |
 
-```
-uvicorn main:app --host 0.0.0.0 --port $PORT
-```
-
-This happens internally — no manual configuration required.
-
----
-
-### 5️⃣ Custom Domain Setup
-
-* A **custom domain** is added via Railway
-* Railway automatically:
-
-  * Handles DNS routing
-  * Enables HTTPS
-  * Routes traffic to the FastAPI backend
-
-The backend becomes publicly accessible through the custom domain.
-
----
-
-## 🔗 API Endpoint
-
-### Benchmark API
-
-```
-POST /benchmark
+```bash
+curl -X POST localhost:8000/benchmark \
+  -F audio=@clip.wav -F reference_text="నమస్కారం రైతు గారు" -F language_code=te-IN
 ```
 
-**Accepts:**
+```json
+{
+  "run_id": 42,
+  "results": [
+    {"provider": "OpenAI", "model": "gpt-4o-transcribe", "text": "…", "wer": 0.125, "latency_ms": 1840.2, "status": "success"},
+    {"provider": "Google", "model": null, "text": "", "wer": null, "latency_ms": null, "status": "skipped",
+     "error": "language_code is required for Google"}
+  ]
+}
+```
 
-* Audio file
-* Reference transcript
-* Language code (optional)
+`GET /` is a health check, and `GET /providers` lists the providers and whether each needs a language code.
 
-**Returns:**
+## Running it
 
-* STT provider name
-* Model name
-* Transcription output
-* Word Error Rate (WER)
-* Latency (ms)
-* Status (success/failure)
+```bash
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements-dev.txt
+cp .env.example .env        # fill in whichever provider keys you have
+uvicorn main:app --reload
+```
 
----
+Without `DATABASE_URL`, results go to `./stt_benchmark.db` (SQLite). A
+provider without credentials fails on its own and doesn't take down the
+service, because SDKs are imported inside each adapter.
 
-## 📦 Dependencies
+With Docker:
 
-All required dependencies are listed in `requirements.txt`.
-Railway installs them automatically during deployment.
+```bash
+docker build -t stt-benchmark-backend .
+docker run --env-file .env -p 8000:8000 stt-benchmark-backend
+```
 
----
+## Testing
 
-## 🧠 Key Design Decisions
+```bash
+pytest -q          # 23 tests, no network or API keys needed
+ruff check .
+```
 
-* Environment variables used for all secrets
-* No credentials committed to GitHub
-* Same codebase works locally and in production
-* Railway-managed PostgreSQL used in production
-* SQLite fallback available for local testing
+The API tests replace the provider table with fakes and check scoring,
+the `success/failed/skipped` semantics, what gets persisted, input
+validation, and polling timeouts. CI runs them on every push, then builds
+the Docker image and checks that it boots.
 
----
+To check real credentials, run the live smoke script. Providers without
+keys show as `SKIPPED`, and secrets are never printed:
 
-## 📌 Versioning
+```bash
+python scripts/smoke_providers.py clip.wav --reference "…" --language te-IN
+```
 
-* **v1.0** – STT Benchmarking Platform
-* **v1.1 (Planned)** – AI4Bharat & Bhashini integration
+## Design decisions
 
----
+- **One adapter per provider, one output shape.** New providers are a new
+  file plus a line in `PROVIDERS`. Multi-model providers return a list, and a
+  failing model reports its own error without hiding its siblings.
+- **Failures are data, not zeros.** An errored model used to be scored as
+  an empty transcript (WER 1.0, "success"), which quietly punished
+  providers for outages. Now it is `failed` and isn't persisted.
+- **Bounded everything.** Every HTTP call has a timeout, and async job APIs
+  go through `poll_until()` with a deadline and a failure predicate.
+- **Azure uses continuous recognition.** `recognize_once()` stops at the
+  first pause, which truncated longer clips and inflated Azure's WER.
 
-## 📝 One-line Summary
+## Limitations
 
-> This backend benchmarks multiple Speech-to-Text providers using a FastAPI REST service, deployed automatically on Railway via GitHub integration with secure environment variable management.
-
----
+- WER on a single clip is noisy. Compare providers over a set of
+  clips per language, not one upload.
+- Normalization does not unify numerals ("20" vs "twenty") or
+  transliterated English words written in Indic script. Both count as errors.
+- Google STT v1 expects LINEAR16 WAV for the synchronous endpoint used
+  here. Other formats fail for that provider only.
+- Latency is measured from this server, so it includes network distance to
+  each vendor and upload time. It is not model inference time.
+- There is no authentication on the API. Deploy it behind a gateway or
+  restrict `CORS_ORIGINS`.

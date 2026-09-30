@@ -21,6 +21,20 @@ def test_normalize_drops_danda():
     assert normalize_text("फसल अच्छी है।") == "फसल अच्छी है"
 
 
+def test_nukta_and_chandrabindu_variants_are_the_same_word():
+    # Seen from IndicConformer on TTS audio: a correct transcript that spells
+    # गेहूं/फसल as गेहूँ/फ़सल must not be scored as two substitutions.
+    ref = "किसान भाई इस साल गेहूं की फसल अच्छी हुई है"
+    hyp = "किसान भाई इस साल गेहूँ की फ़सल अच्छी हुई है"
+    assert word_error_rate(ref, hyp) == 0.0
+    assert word_error_rate("\u092b\u093c\u0938\u0932", "\u095e\u0938\u0932") == 0.0   # decomposed vs precomposed nukta letter
+
+
+def test_telugu_arasunna_is_not_merged():
+    # Telugu chandrabindu (U+0C01) and anusvara (U+0C02) are different sounds.
+    assert normalize_text("\u0c05\u0c01") != normalize_text("\u0c05\u0c02")
+
+
 def test_wrong_hindi_hypothesis_is_penalised():
     # Before the fix this returned 0.0 because both sides collapsed to "कसन भई".
     assert word_error_rate("किसान भाई", "कसान भई") == 1.0

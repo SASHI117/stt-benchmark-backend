@@ -45,7 +45,8 @@ flowchart TB
    the reported latency is per provider. The total request time is the
    slowest provider, not the sum of all of them.
 3. Each transcript and the reference are normalized: NFC → casefold →
-   remove Unicode punctuation/symbols/format characters → collapse whitespace.
+   drop nukta and map Devanagari chandrabindu to anusvara → remove Unicode
+   punctuation/symbols/format characters → collapse whitespace.
 4. WER = (substitutions + deletions + insertions) / reference words, computed
    by word-level Levenshtein distance. It can exceed 1.0 when a provider
    hallucinates extra words.
@@ -68,6 +69,13 @@ WER = 0.0
 Every Hindi/Telugu/Tamil score was optimistic. The fix removes characters
 by category (`P*`, `S*`, `Cf`), and `tests/test_metrics.py` pins the
 regression.
+
+The opposite error showed up when I ran the self-hosted IndicConformer model on
+a known Hindi sentence. It returned गेहूँ / फ़सल for a reference spelled गेहूं /
+फसल: the same words, written with chandrabindu and nukta. Scored literally,
+a perfect transcript lost 2 of 9 words. The normalizer now treats those
+variants as equal. Telugu's chandrabindu (arasunna) is left alone, because
+there it is a different sound.
 
 ## API
 
@@ -122,7 +130,7 @@ docker run --env-file .env -p 8000:8000 stt-benchmark-backend
 ## Testing
 
 ```bash
-pytest -q          # 23 tests, no network or API keys needed
+pytest -q          # 25 tests, no network or API keys needed
 ruff check .
 ```
 

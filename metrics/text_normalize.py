@@ -1,6 +1,9 @@
 import re
 import unicodedata
 
+_NUKTAS = "\u093c\u09bc\u0a3c\u0abc\u0b3c\u0cbc"   # Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Kannada
+_INDIC_VARIANTS = {ord(c): None for c in _NUKTAS} | {0x0901: 0x0902}   # chandrabindu -> anusvara
+
 
 def normalize_text(text: str) -> str:
     """
@@ -15,6 +18,11 @@ def normalize_text(text: str) -> str:
         return ""
 
     text = unicodedata.normalize("NFC", text).casefold()
+    # Spelling variants that are the same word: nukta (फ़/फ, NFC already splits
+    # precomposed nukta letters into base + U+093C) and Devanagari chandrabindu
+    # vs anusvara (गेहूँ/गेहूं). ASR systems pick either form freely, so scoring
+    # them as substitutions penalises correct transcripts.
+    text = text.translate(_INDIC_VARIANTS)
 
     kept = []
     for ch in text:

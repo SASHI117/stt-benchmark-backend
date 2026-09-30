@@ -7,8 +7,8 @@
 A FastAPI service that sends one audio clip to eight speech-to-text providers
 (eleven models) and scores each transcript against a reference with **word
 error rate** and **latency**. I built it during my internship at FarmVaidya.ai
-to choose an ASR engine for Telugu/Hindi farmer conversations. The question
-it answers is *which provider is accurate enough, fast enough, on our audio*,
+to compare ASR engines on Indian-language farmer audio. The question it
+answers is *which provider is accurate enough, fast enough, on our audio*,
 not on a vendor's English benchmark.
 
 The web UI lives in [stt-benchmark-frontend](https://github.com/SASHI117/stt-benchmark-frontend).
@@ -17,20 +17,14 @@ The self-hosted AI4Bharat model it calls is [ai4bharat_stt](https://github.com/S
 ## Architecture
 
 ```mermaid
-flowchart LR
-    UI[Static web UI] -- "multipart: audio + reference + language" --> API["/benchmark (FastAPI)"]
-    API --> POOL{{ThreadPoolExecutor}}
-    POOL --> AZ[Azure Speech]
-    POOL --> OA["OpenAI: gpt-4o-transcribe,<br/>gpt-4o-mini-transcribe, whisper-1"]
-    POOL --> EL["ElevenLabs: scribe_v1, scribe_v2"]
-    POOL --> RV[Rev.ai]
-    POOL --> SV["Sarvam saarika:v2.5"]
-    POOL --> SX["Soniox stt-async-v3"]
-    POOL --> GG["Google STT *"]
-    POOL --> AI["AI4Bharat IndicConformer *<br/>(self-hosted)"]
-    POOL --> WER[normalize → WER]
+flowchart TB
+    UI[Static web UI] -- "audio + reference + language" --> API["POST /benchmark (FastAPI)"]
+    API --> POOL{{"ThreadPoolExecutor: one task per provider"}}
+    POOL --> AZ[Azure Speech] & OA["OpenAI ×3"] & EL["ElevenLabs ×2"] & RV[Rev.ai]
+    POOL --> SV[Sarvam] & SX[Soniox] & GG["Google *"] & AI["AI4Bharat *<br/>(self-hosted)"]
+    AZ & OA & EL & RV & SV & SX & GG & AI --> WER["transcripts → normalize → WER"]
     WER --> DB[(PostgreSQL / SQLite)]
-    WER --> UI
+    WER -. "scores + latency" .-> UI
 ```
 
 `*` needs an explicit `language_code`. The others detect the language themselves.
@@ -89,6 +83,8 @@ regression.
 curl -X POST localhost:8000/benchmark \
   -F audio=@clip.wav -F reference_text="నమస్కారం రైతు గారు" -F language_code=te-IN
 ```
+
+Response shape (values are illustrative):
 
 ```json
 {
@@ -150,8 +146,9 @@ python scripts/smoke_providers.py clip.wav --reference "…" --language te-IN
 - **Failures are data, not zeros.** An errored model used to be scored as
   an empty transcript (WER 1.0, "success"), which quietly punished
   providers for outages. Now it is `failed` and isn't persisted.
-- **Bounded everything.** Every HTTP call has a timeout, and async job APIs
-  go through `poll_until()` with a deadline and a failure predicate.
+- **Bounded waits.** Every direct HTTP call has a timeout, and async job APIs
+  go through `poll_until()` with a deadline and a failure predicate. Vendor
+  SDK calls (OpenAI, ElevenLabs, Sarvam, Azure) rely on the SDKs' own timeouts.
 - **Azure uses continuous recognition.** `recognize_once()` stops at the
   first pause, which truncated longer clips and inflated Azure's WER.
 

@@ -53,29 +53,16 @@ flowchart TB
 5. Successful rows are written to the database. Failures come back with
    `status: failed|skipped` and an `error` message instead of a fake score.
 
-### Why normalization is by Unicode category
+### Indic-aware normalization
 
-The first version stripped punctuation with `re.sub(r"[^\w\s]", "", text)`.
-Python's `\w` does **not** match combining marks, and Indic vowel signs
-(matras) and viramas are combining marks. The normalizer therefore deleted
-them, and different words collapsed into the same string:
+Scoring Indian-language transcripts fairly takes more than lower-casing and stripping punctuation:
 
-```text
-reference   किसान भाई      →  कसन भई
-hypothesis  कसान भई  (wrong) →  कसन भई
-WER = 0.0
-```
-
-Every Hindi/Telugu/Tamil score was optimistic. The fix removes characters
-by category (`P*`, `S*`, `Cf`), and `tests/test_metrics.py` pins the
-regression.
-
-The opposite error showed up when I ran the self-hosted IndicConformer model on
-a known Hindi sentence. It returned गेहूँ / फ़सल for a reference spelled गेहूं /
-फसल: the same words, written with chandrabindu and nukta. Scored literally,
-a perfect transcript lost 2 of 9 words. The normalizer now treats those
-variants as equal. Telugu's chandrabindu (arasunna) is left alone, because
-there it is a different sound.
+- **Vowel signs and viramas are kept.** Punctuation is removed by Unicode category (`P*`, `S*`,
+  `Cf`), not with a `\w` regex, because `\w` doesn't match combining marks such as Devanagari and
+  Telugu matras.
+- **Accepted spelling variants count as the same word.** Nukta forms (फ़सल / फसल) and Devanagari
+  chandrabindu vs anusvara (गेहूँ / गेहूं) are unified. Telugu's arasunna, a distinct sound, is kept.
+- `tests/test_metrics.py` covers each of these cases.
 
 ## API
 
@@ -151,24 +138,24 @@ python scripts/smoke_providers.py clip.wav --reference "…" --language te-IN
 - **One adapter per provider, one output shape.** New providers are a new
   file plus a line in `PROVIDERS`. Multi-model providers return a list, and a
   failing model reports its own error without hiding its siblings.
-- **Failures are data, not zeros.** An errored model used to be scored as
-  an empty transcript (WER 1.0, "success"), which quietly punished
-  providers for outages. Now it is `failed` and isn't persisted.
+- **Failures are reported, not scored.** A provider or model that errors comes back as
+  `failed` with its message and isn't persisted, so an outage never shows up as a bad WER.
 - **Bounded waits.** Every direct HTTP call has a timeout, and async job APIs
   go through `poll_until()` with a deadline and a failure predicate. Vendor
   SDK calls (OpenAI, ElevenLabs, Sarvam, Azure) rely on the SDKs' own timeouts.
-- **Azure uses continuous recognition.** `recognize_once()` stops at the
-  first pause, which truncated longer clips and inflated Azure's WER.
+- **Full-length transcription everywhere.** Azure runs in continuous-recognition mode, so long
+  clips are transcribed end to end like every other provider.
 
-## Limitations
+## Usage tips
 
-- WER on a single clip is noisy. Compare providers over a set of
-  clips per language, not one upload.
-- Normalization does not unify numerals ("20" vs "twenty") or
-  transliterated English words written in Indic script. Both count as errors.
-- Google STT v1 expects LINEAR16 WAV for the synchronous endpoint used
-  here. Other formats fail for that provider only.
-- Latency is measured from this server, so it includes network distance to
-  each vendor and upload time. It is not model inference time.
-- There is no authentication on the API. Deploy it behind a gateway or
-  restrict `CORS_ORIGINS`.
+- Benchmark over a set of clips per language, not a single upload, and compare the averages.
+- Latency is measured end to end from this server, including network and upload time, which is
+  what an application built on the provider actually experiences.
+- Google STT v1's synchronous endpoint expects LINEAR16 WAV, so send WAV when Google is in the comparison.
+- Run the API behind a gateway, or restrict `CORS_ORIGINS`, when deploying it publicly.
+
+## Roadmap
+
+- Numeral normalization ("20" vs "twenty") and transliteration-aware scoring.
+- Batch benchmarking over a folder of clips with aggregate WER and latency percentiles.
+- API authentication and per-user benchmark history.
